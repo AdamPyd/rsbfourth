@@ -1,5 +1,7 @@
 // 创建统一的 API 客户端
-const API_BASE_URL = import.meta.env.VITE_API_FULL_URL;
+const VITE_API_FULL_URL = import.meta.env.VITE_API_BASE_URL + ":"
+    + import.meta.env.VITE_BACKEND_PORT
+    + import.meta.env.VITE_API_BASE_PATH;
 
 const handleResponse = async (response) => {
     if (!response.ok) {
@@ -14,7 +16,7 @@ const handleResponse = async (response) => {
 
 export const apiClient = {
     get: async (endpoint) => {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${VITE_API_FULL_URL}${endpoint}`;
 console.log(`发送 GET 请求到: ${url}`);
 
 const response = await fetch(url, {

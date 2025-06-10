@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Button, message, Card, Spin } from 'antd';
 import { apiClient } from '../utils/api';
 
+// 获取前端端口
+const frontendPort = import.meta.env.VITE_WEB_URL_PORT;
+
 const TestPage = () => {
     const [response, setResponse] = useState('');
     const [loading, setLoading] = useState(false);
@@ -43,9 +46,9 @@ const TestPage = () => {
 
             <Card title="调试信息" style={{ marginTop: 24 }}>
                 <p><strong>当前环境:</strong> {import.meta.env.MODE}</p>
-                <p><strong>API 基地址:</strong> {import.meta.env.VITE_API_BASE_URL}</p>
-                <p><strong>后端端口:</strong> 8080</p>
-                <p><strong>前端端口:</strong> 3000</p>
+                <p><strong>API 基地址:</strong> {import.meta.env.VITE_API_BASE_URL}:{import.meta.env.VITE_BACKEND_PORT}{import.meta.env.VITE_API_BASE_PATH}</p>
+                <p><strong>后端端口:</strong> {import.meta.env.VITE_BACKEND_PORT}</p>
+                <p><strong>前端端口:</strong> {import.meta.env.VITE_WEB_URL_PORT}</p>
             </Card>
         </div>
     );

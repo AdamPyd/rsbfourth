@@ -18,7 +18,10 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:3000") // 允许前端开发服务器
+                // 允许前端开发服务器
+                .allowedOrigins("http://localhost:3000"
+                        , "http://localhost:80"
+                        , "http://localhost")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
