@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @Profile("dev")
 public class DevForwardController {
 
-//    @RequestMapping(value = {"/", "/{path:[^\\.]*}"})
-//    public String forward() {
-////        return "forward:http://localhost:3000";
-//        return "forward:/index.html";
-//    }
+    @RequestMapping(value = {"/", "/{path:[^\\.]*}"})
+    public String forward() {
+//        return "forward:http://localhost:3000";
+        return "forward:/index.html";
+    }
 }
