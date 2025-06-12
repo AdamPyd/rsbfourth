@@ -27,6 +27,10 @@ public class TestController {
     @Value("${server.port}")
     private String serverPort;
 
+    /**
+     * hello world
+     * @return
+     */
     @GetMapping(path = "/hello.json", produces = "application/json;charset=UTF-8")
     @ResponseBody
     public Map<String, Object> hello() {
@@ -42,7 +46,8 @@ public class TestController {
      * health 健康检查
      * @return
      */
-    @GetMapping(path = "/health", produces = "application/json;charset=UTF-8")
+    @RequestMapping(method = {RequestMethod.GET},path = "/health"
+            , produces = "application/json;charset=UTF-8")
     @ResponseBody
     public Map<String, String> healthCheck() {
         Map<String, String> response = new HashMap<>();
