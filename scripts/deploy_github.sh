@@ -2,7 +2,7 @@
 
 SERVER_IP="47.114.48.162"  # 替换为实际IP
 SSH_USER="deployer"
-GITHUB_REPO="https://github.com/yourusername/yourrepo.git"
+GITHUB_REPO="git@github.com:AdamPyd/rsbfourth.git"
 
 ssh ${SSH_USER}@${SERVER_IP} << EOF
   # 清理旧目录

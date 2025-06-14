@@ -5,13 +5,12 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 构建前端
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -26,40 +25,30 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # 构建后端
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'maven'
 
       - name: Build backend
         working-directory: backend
         run: mvn clean package -DskipTests
 
-      # 部署到服务器
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to production
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: 47.114.48.162
-          username: deployer
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 停止服务
-            sudo systemctl stop myapp
+            # 以部署用户身份运行部署脚本
+            sudo -u deployer /opt/rsbfourth/deploy.sh
 
-            # 部署文件
-            rm -rf /opt/myapp/frontend
-            mkdir -p /opt/myapp/frontend
-            cp -r frontend/dist/* /opt/myapp/frontend/
-            cp backend/target/*.jar /opt/myapp/backend.jar
-
-            # 重启服务
-            sudo systemctl start myapp
-
-            # 健康检查
-            sleep 10
-            curl -f http://localhost:8080/api/health || exit 1
-
-            echo "部署成功！"
+            # 获取部署日志
+            echo "====== 部署日志 ======"
+            tail -n 20 /opt/rsbfourth/deploy.log
