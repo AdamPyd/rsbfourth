@@ -1,11 +1,11 @@
-name: Build and Deploy
+name: Deploy rsbfourth
 
 on:
   push:
     branches: [main]
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -15,15 +15,12 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
 
       - name: Build frontend
         working-directory: frontend
-        run: npm run build
+        run: |
+          npm ci
+          npm run build
 
       - name: Setup Java
         uses: actions/setup-java@v3
@@ -35,20 +32,35 @@ jobs:
         working-directory: backend
         run: mvn clean package -DskipTests
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to production
+      - name: Prepare artifacts
+        run: |
+          mkdir -p deploy_artifacts
+          cp -r frontend/dist deploy_artifacts/frontend
+          cp backend/target/*.jar deploy_artifacts/backend.jar
+          tar -czvf artifacts.tar.gz deploy_artifacts
+
+      - name: Transfer artifacts
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "artifacts.tar.gz"
+          target: "/opt/rsbfourth/"
+
+      - name: Execute deployment
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 以部署用户身份运行部署脚本
-            sudo -u deployer /opt/rsbfourth/deploy.sh
-
-            # 获取部署日志
-            echo "====== 部署日志 ======"
-            tail -n 20 /opt/rsbfourth/deploy.log
+            cd /opt/rsbfourth
+            tar -xzvf artifacts.tar.gz
+            sudo systemctl stop rsbfourth || true
+            cp deploy_artifacts/backend.jar .
+            rm -rf frontend
+            cp -r deploy_artifacts/frontend .
+            sudo chown -R deployer:deployer /opt/rsbfourth
+            sudo systemctl start rsbfourth
+            rm -rf deploy_artifacts artifacts.tar.gz
