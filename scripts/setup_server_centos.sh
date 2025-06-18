@@ -3,7 +3,7 @@
 sudo -i
 
 cat > setup_server_centos.sh << 'EOF'
-
+#!/bin/bash
 set -euo pipefail
 
 # 检测操作系统
@@ -11,9 +11,6 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
     OS_VERSION=$VERSION_ID
-elif type lsb_release >/dev/null 2>&1; then
-    OS=$(lsb_release -si | tr '[:upper:]' '[:lower:]')
-    OS_VERSION=$(lsb_release -sr)
 elif [ -f /etc/redhat-release ]; then
     OS="centos"
     OS_VERSION=$(grep -oE '[0-9]+\.[0-9]+' /etc/redhat-release | head -1)
@@ -23,6 +20,24 @@ else
 fi
 
 echo "检测到操作系统: $OS $OS_VERSION"
+
+# 修复CentOS 7的软件包冲突
+fix_centos7_conflict() {
+    if [[ "$OS" == "centos" && "$OS_VERSION" == "7" ]]; then
+        echo "正在解决CentOS 7软件包冲突..."
+        
+        # 强制更新centos-release
+        sudo yum install -y --disablerepo=* --enablerepo=base,updates centos-release
+        
+        # 清理并重建仓库缓存
+        sudo yum clean all
+        sudo rm -rf /var/cache/yum
+        sudo rpm --rebuilddb
+        
+        # 更新系统核心包（跳过冲突）
+        sudo yum update -y --skip-broken
+    fi
+}
 
 # 安装软件包
 install_packages() {
@@ -38,12 +53,13 @@ install_packages() {
                 sudo yum update -y
                 sudo yum install -y "$@"
             else
-                # 修复：先更新 centos-release 解决冲突
-                if [ "$OS" = "centos" ]; then
-                    sudo yum update -y centos-release
-                fi
+                # 首先安装 EPEL 仓库
                 sudo yum install -y epel-release
-                sudo yum update -y
+                
+                # 安装基础工具
+                sudo yum install -y curl wget
+                
+                # 安装其他包
                 sudo yum install -y "$@"
             fi
             ;;
@@ -105,29 +121,62 @@ setup_project_dir() {
     sudo chown -R deployer:deployer /opt/rsbfourth
 }
 
-# 安装 Node.js
+# 安装 Node.js (使用NVM方法)
 install_nodejs() {
-    if command -v node &>/dev/null && node --version | grep -q 'v18'; then
-        echo "Node.js 18 已安装"
+    # 检查是否已安装Node.js v16
+    if command -v node &>/dev/null && node --version | grep -q 'v16'; then
+        echo "Node.js 16 已安装"
         return
     fi
 
-    echo "安装 Node.js 18..."
+    echo "安装 Node.js 16 (CentOS 7 兼容版本)..."
 
     case $OS in
         ubuntu|debian)
-            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            # Ubuntu/Debian使用官方仓库安装
+            curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
             sudo apt install -y nodejs
             ;;
         centos|rhel|fedora|amzn)
-            curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-            sudo yum install -y nodejs
+            # CentOS/RHEL使用NVM安装
+            echo "使用NVM安装Node.js..."
+            
+            # 安装依赖
+            sudo yum install -y curl git gcc-c++ make 
+            
+            # 安装NVM
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+            
+            # 立即加载NVM
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+            
+            # 安装Node.js v16
+            nvm install 16
+            nvm use 16
+            
+            # 确保所有用户都能使用Node.js
+            NODE_PATH=$(which node)
+            NPM_PATH=$(which npm)
+            sudo ln -sf "$NODE_PATH" /usr/local/bin/node
+            sudo ln -sf "$NPM_PATH" /usr/local/bin/npm
+            sudo ln -sf "$(which npx)" /usr/local/bin/npx
+            
+            # 添加环境变量到全局profile
+            echo 'export NVM_DIR="$HOME/.nvm"' | sudo tee /etc/profile.d/nvm.sh
+            echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' | sudo tee -a /etc/profile.d/nvm.sh
+            echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' | sudo tee -a /etc/profile.d/nvm.sh
+            echo 'export PATH=$PATH:/usr/local/bin' | sudo tee -a /etc/profile.d/nvm.sh
+            
+            # 立即生效
+            source /etc/profile.d/nvm.sh
             ;;
     esac
 
-    # 验证安装
-    node --version
-    npm --version
+    # 验证安装 (使用绝对路径确保可用)
+    echo "Node.js 版本: $(/usr/local/bin/node -v)"
+    echo "npm 版本: $(/usr/local/bin/npm -v)"
 }
 
 # 配置 Nginx
@@ -144,13 +193,28 @@ server {
     location / {
         root /opt/rsbfourth/frontend;
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires 0;
     }
 
     location /api {
-        proxy_pass http://127.0.0.1:80;
+        proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 超时设置
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    # 健康检查端点
+    location /health {
+        proxy_pass http://127.0.0.1:8080/api/health;
+        access_log off;
     }
 }
 NGINX_EOF
@@ -182,10 +246,20 @@ After=network.target
 User=deployer
 Group=deployer
 WorkingDirectory=/opt/rsbfourth
-ExecStart=/usr/bin/java -jar backend.jar
+ExecStart=/usr/bin/java -Xms512m -Xmx1024m -jar backend.jar
+Environment="SPRING_PROFILES_ACTIVE=prod"
+SuccessExitStatus=143
 Restart=always
 RestartSec=30
-Environment="SPRING_PROFILES_ACTIVE=prod"
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=rsbfourth
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+PrivateDevices=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -197,10 +271,13 @@ SERVICE_EOF
 
 # 主函数
 main() {
+    # 修复CentOS 7软件包冲突
+    fix_centos7_conflict
+    
     # 安装必要软件
     install_packages openjdk-17-jdk maven git
 
-    # 安装 Node.js
+    # 安装 Node.js (使用NVM方法)
     install_nodejs
 
     # 添加部署用户
@@ -219,19 +296,45 @@ main() {
     configure_systemd_service
 
     echo "=========================================="
-    echo "服务器初始化完成！"
+    echo "✅ 服务器初始化完成！"
     echo "操作系统: $OS $OS_VERSION"
     echo "部署用户: deployer"
     echo "项目目录: /opt/rsbfourth"
+    echo "Node.js 版本: $(/usr/local/bin/node -v)"
     echo "Nginx 配置文件: /etc/nginx/conf.d/rsbfourth.conf"
     echo "Systemd 服务: rsbfourth.service"
     echo "=========================================="
+    
+    # 最终验证
+    echo "正在执行最终验证..."
+    if ! command -v node &> /dev/null; then
+        echo "❌ 错误: node 命令仍然不可用"
+        echo "尝试手动修复:"
+        echo "1. 检查符号链接: ls -l /usr/local/bin/node"
+        echo "2. 加载环境变量: source /etc/profile.d/nvm.sh"
+        echo "3. 检查PATH: echo \$PATH"
+    else
+        echo "✅ 验证通过: node 命令可用"
+    fi
 }
 
 # 执行主函数
 main
-
 EOF
 
+# 设置执行权限
 chmod +x setup_server_centos.sh
+
+# 执行修复后的脚本
+echo "开始执行服务器初始化脚本..."
 ./setup_server_centos.sh
+
+# 最终检查
+if [ $? -eq 0 ]; then
+    echo "服务器初始化脚本执行完成！"
+else
+    echo "脚本执行过程中出现错误。"
+    echo "请检查日志并执行以下命令手动验证Node.js安装:"
+    echo "source /etc/profile.d/nvm.sh"
+    echo "node -v"
+fi
