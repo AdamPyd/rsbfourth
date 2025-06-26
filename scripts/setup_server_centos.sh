@@ -275,7 +275,7 @@ main() {
     fix_centos7_conflict
     
     # 安装必要软件
-    install_packages openjdk-17-jdk maven git
+    install_packages openjdk-8-jdk maven git
 
     # 安装 Node.js (使用NVM方法)
     install_nodejs
