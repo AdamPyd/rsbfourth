@@ -25,6 +25,14 @@ const TestPage = () => {
         }
     };
 
+    // 获取协议（例如：https:）
+    const protocol = window.location.protocol;
+
+    // 获取主机名（例如：www.example.com）
+    const hostname = window.location.hostname;
+
+    const ACTUAL_BASE_URL = protocol + "//" + hostname;
+
     return (
         <div style={{ padding: 24 }}>
             <Card title="API 测试">
@@ -46,7 +54,7 @@ const TestPage = () => {
 
             <Card title="调试信息" style={{ marginTop: 24 }}>
                 <p><strong>当前环境:</strong> {import.meta.env.MODE}</p>
-                <p><strong>API 基地址:</strong> {import.meta.env.VITE_API_BASE_URL}:{import.meta.env.VITE_BACKEND_PORT}{import.meta.env.VITE_API_BASE_PATH}</p>
+                <p><strong>API 基地址:</strong> {ACTUAL_BASE_URL}:{import.meta.env.VITE_BACKEND_PORT}{import.meta.env.VITE_API_BASE_PATH}</p>
                 <p><strong>后端端口:</strong> {import.meta.env.VITE_BACKEND_PORT}</p>
                 <p><strong>前端端口:</strong> {import.meta.env.VITE_WEB_URL_PORT}</p>
             </Card>
