@@ -14,6 +14,7 @@ export default defineConfig(({ command, mode }) => {
         plugins: [react()],
         server: {
             port: WEB_URL_PORT,
+            host: '0.0.0.0',
             strictPort: true, // 确保端口固定
         },
         // 这个 proxy 貌似没什么用
